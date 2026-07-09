@@ -160,11 +160,11 @@ def _normalize_rect(values: dict, canvas: CanvasSize, region_id: int, existing_r
     return normalized
 
 
-def normalize_rect_state(props: dict, canvas_x=None, canvas_y=None, grid_size=None, active_regions=None) -> RectCanvasState:
+def normalize_rect_state(props: dict, canvas_width=None, canvas_height=None, grid_size=None, active_regions=None) -> RectCanvasState:
     canvas_props = props.get("canvas") if isinstance(props.get("canvas"), dict) else {}
     canvas = normalize_canvas_size(
-        canvas_x if canvas_x is not None else canvas_props.get("width"),
-        canvas_y if canvas_y is not None else canvas_props.get("height"),
+        canvas_width if canvas_width is not None else canvas_props.get("width"),
+        canvas_height if canvas_height is not None else canvas_props.get("height"),
         grid_size if grid_size is not None else canvas_props.get("gridSize"),
     )
     active_regions = normalize_region_count(active_regions if active_regions is not None else props.get("activeRegions"))

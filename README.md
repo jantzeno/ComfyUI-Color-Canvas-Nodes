@@ -47,10 +47,10 @@ Rectangular canvas nodes store `activeRegions`, `canvas`, and per-region
 
 Controls:
 
-- `canvasX` and `canvasY` set the generated image size in 64-pixel steps to match common latent presets.
+- `width` and `height` set the generated image size in 64-pixel steps to match common latent presets.
 - `grid size` controls grid rendering and snap precision with values `8`, `16`, `32`, or `64`.
 - `regions` sets the active integer region count.
-- `canvasX`, `canvasY`, `grid size`, and `regions` are standard connectable ComfyUI widgets.
+- `width`, `height`, `grid size`, and `regions` are standard connectable ComfyUI widgets.
 - The compact region table shows every active region with color, id, `x`, `y`,
   `w`, and `h` columns.
 - Click a table row or visible active rectangle to select it.

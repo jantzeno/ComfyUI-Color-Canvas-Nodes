@@ -28,14 +28,14 @@ class RegionalColorCanvas(io.ComfyNode):
             hidden=[io.Hidden.extra_pnginfo, io.Hidden.unique_id],
             inputs=[
                 io.Int.Input(
-                    "canvasX",
+                    "width",
                     default=DEFAULT_WIDTH,
                     min=MIN_RESOLUTION,
                     max=MAX_RESOLUTION,
                     step=DIMENSION_STEP,
                 ),
                 io.Int.Input(
-                    "canvasY",
+                    "height",
                     default=DEFAULT_HEIGHT,
                     min=MIN_RESOLUTION,
                     max=MAX_RESOLUTION,
@@ -66,11 +66,11 @@ class RegionalColorCanvas(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, canvasX: int, canvasY: int, grid_size: int, regions: int) -> io.NodeOutput:
+    def execute(cls, width: int, height: int, grid_size: int, regions: int) -> io.NodeOutput:
         state = normalize_rect_state(
             get_regional_properties(cls.hidden),
-            canvas_x=canvasX,
-            canvas_y=canvasY,
+            canvas_width=width,
+            canvas_height=height,
             grid_size=grid_size,
             active_regions=regions,
         )

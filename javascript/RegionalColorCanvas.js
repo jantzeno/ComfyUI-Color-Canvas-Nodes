@@ -51,6 +51,8 @@ const TABLE_COLUMNS = [
 	{ key: "height", label: "h" },
 ];
 const NUMERIC_TABLE_KEYS = new Set(["x", "y", "width", "height"]);
+const WIDTH_WIDGET_NAMES = ["width", "Width", "WIDTH", "canvas_width", "image_width"];
+const HEIGHT_WIDGET_NAMES = ["height", "Height", "HEIGHT", "canvas_height", "image_height"];
 
 let activeTableNode = null;
 
@@ -105,26 +107,122 @@ function configureWidget(widget, callback, options) {
 	widget.options = Object.assign({}, widget.options || {}, options);
 }
 
-function syncWidgetValuesToState(node) {
+function inputLink(node, inputName) {
+	const input = node.inputs?.find((entry) => entry.name === inputName || entry.widget?.name === inputName);
+	if (!input || input.link == null) {
+		return null;
+	}
+	if (typeof input.link === "object") {
+		return input.link;
+	}
+	const links = node.graph?.links;
+	return links?.get?.(input.link) ?? links?.[input.link] ?? null;
+}
+
+function widgetValue(node, names) {
+	for (const name of names) {
+		const widget = getWidget(node, name);
+		if (widget?.value != null && Number.isFinite(Number(widget.value))) {
+			return Number(widget.value);
+		}
+	}
+	return null;
+}
+
+function parseDimensionPreset(sourceNode) {
+	const rawDimensions = getWidget(sourceNode, "dimensions")?.value;
+	const dimensions = typeof rawDimensions === "string" ? rawDimensions.split(" - ").pop() : null;
+	if (typeof dimensions !== "string") {
+		return null;
+	}
+	const match = dimensions.match(/(\d+)\s*x\s*(\d+)/i);
+	if (!match) {
+		return null;
+	}
+	const invert = Boolean(getWidget(sourceNode, "invert")?.value);
+	const width = Number(match[invert ? 2 : 1]);
+	const height = Number(match[invert ? 1 : 2]);
+	return Number.isFinite(width) && Number.isFinite(height) ? { width, height } : null;
+}
+
+function outputLinkedValue(node, inputName, dimension) {
+	const link = inputLink(node, inputName);
+	if (!link || link.origin_id < 0) {
+		return null;
+	}
+	const sourceNode = node.graph?.getNodeById?.(link.origin_id);
+	if (!sourceNode) {
+		return null;
+	}
+
+	const output = sourceNode.outputs?.[link.origin_slot];
+	const outputName = String(output?.name ?? "").toLowerCase();
+	const preset = parseDimensionPreset(sourceNode);
+	if (preset && ((dimension === "width" && outputName.includes("width")) || (dimension === "height" && outputName.includes("height")))) {
+		return preset[dimension];
+	}
+
+	const candidates = dimension === "width" ? WIDTH_WIDGET_NAMES : HEIGHT_WIDGET_NAMES;
+	const directWidgetValue = widgetValue(sourceNode, candidates);
+	if (directWidgetValue != null) {
+		return directWidgetValue;
+	}
+
+	const outputValue = output?.value ?? output?._value;
+	return Number.isFinite(Number(outputValue)) ? Number(outputValue) : null;
+}
+
+function resolveControlValue(node, widgetName, dimension, fallback) {
+	const linkedValue = outputLinkedValue(node, widgetName, dimension);
+	if (linkedValue != null) {
+		return linkedValue;
+	}
+	return getWidget(node, widgetName)?.value ?? fallback;
+}
+
+function applyCanvasControlValues(node, markDirty = false) {
 	const state = ensureRectProperties(node);
-	const canvasXWidget = getWidget(node, "canvasX");
-	const canvasYWidget = getWidget(node, "canvasY");
+	const widthWidget = getWidget(node, "width");
+	const heightWidget = getWidget(node, "height");
 	const gridSizeWidget = gridWidget(node);
 	const regionsWidget = getWidget(node, "regions");
 
-	state.canvas.width = normalizeCanvasDimension(canvasXWidget?.value ?? state.canvas.width, state.canvas.width);
-	state.canvas.height = normalizeCanvasDimension(canvasYWidget?.value ?? state.canvas.height, state.canvas.height);
-	state.canvas.gridSize = normalizeGridSize(gridSizeWidget?.value ?? state.canvas.gridSize);
-	state.activeRegions = clampInt(regionsWidget?.value ?? state.activeRegions, 1, MAX_REGIONS);
+	const nextWidth = normalizeCanvasDimension(resolveControlValue(node, "width", "width", state.canvas.width), state.canvas.width);
+	const nextHeight = normalizeCanvasDimension(resolveControlValue(node, "height", "height", state.canvas.height), state.canvas.height);
+	const nextGridSize = normalizeGridSize(gridSizeWidget?.value ?? state.canvas.gridSize);
+	const nextRegions = clampInt(regionsWidget?.value ?? state.activeRegions, 1, MAX_REGIONS);
+	const changed = (
+		state.canvas.width !== nextWidth ||
+		state.canvas.height !== nextHeight ||
+		state.canvas.gridSize !== nextGridSize ||
+		state.activeRegions !== nextRegions
+	);
+	const previousRegions = state.activeRegions;
+
+	state.canvas.width = nextWidth;
+	state.canvas.height = nextHeight;
+	state.canvas.gridSize = nextGridSize;
+	state.activeRegions = nextRegions;
 	state.selectedRegion = String(clampInt(state.selectedRegion ?? 1, 1, state.activeRegions));
 
-	setWidgetValue(canvasXWidget, state.canvas.width);
-	setWidgetValue(canvasYWidget, state.canvas.height);
+	setWidgetValue(widthWidget, state.canvas.width);
+	setWidgetValue(heightWidget, state.canvas.height);
 	setWidgetValue(gridSizeWidget, state.canvas.gridSize);
 	setWidgetValue(regionsWidget, state.activeRegions);
+	if (state.activeRegions < previousRegions) {
+		hideInactiveRectRegions(state, state.activeRegions + 1);
+	}
 	ensureVisibleRectRegions(state);
 	clampActiveRegionRects(state);
+	if (changed && markDirty) {
+		computeCanvasSize(node, node.size);
+		setDirty(node);
+	}
 	return state;
+}
+
+function syncWidgetValuesToState(node) {
+	return applyCanvasControlValues(node);
 }
 
 function updateRegionValue(node, regionId, key, value) {
@@ -368,7 +466,7 @@ function handleTableMouseDown(node, pos) {
 function bindCanvasWidgets(node) {
 	syncWidgetValuesToState(node);
 
-	configureWidget(getWidget(node, "canvasX"), function (value, _, owner) {
+	configureWidget(getWidget(node, "width"), function (value, _, owner) {
 		const nextState = ensureRectProperties(owner);
 		nextState.canvas.width = normalizeCanvasDimension(value, nextState.canvas.width);
 		this.value = nextState.canvas.width;
@@ -376,7 +474,7 @@ function bindCanvasWidgets(node) {
 		setDirty(owner);
 	}, { min: MIN_RESOLUTION, max: MAX_RESOLUTION, step: DIMENSION_STEP, precision: 0 });
 
-	configureWidget(getWidget(node, "canvasY"), function (value, _, owner) {
+	configureWidget(getWidget(node, "height"), function (value, _, owner) {
 		const nextState = ensureRectProperties(owner);
 		nextState.canvas.height = normalizeCanvasDimension(value, nextState.canvas.height);
 		this.value = nextState.canvas.height;
@@ -414,7 +512,7 @@ function addColorCanvas(node) {
 		type: "customCanvas",
 		name: "RegionalColorCanvas",
 		draw(ctx, owner, widgetWidth, widgetY) {
-			const state = ensureRectProperties(owner);
+			const state = applyCanvasControlValues(owner);
 			computeCanvasSize(owner, owner.size);
 
 			const margin = 10;
@@ -426,15 +524,15 @@ function addColorCanvas(node) {
 			const scale = Math.min((widgetWidth - margin * 2) / width, (widgetHeight - margin * 2) / height);
 			const canvasWidth = width * scale;
 			const canvasHeight = height * scale;
-			const canvasX = margin + Math.max(0, (widgetWidth - canvasWidth) / 2 - margin);
-			const canvasY = widgetY + margin + Math.max(0, (widgetHeight - canvasHeight) / 2 - margin);
+			const canvasLeft = margin + Math.max(0, (widgetWidth - canvasWidth) / 2 - margin);
+			const canvasTop = widgetY + margin + Math.max(0, (widgetHeight - canvasHeight) / 2 - margin);
 
-			owner._regionalCanvasLayout = { x: canvasX, y: canvasY, width: canvasWidth, height: canvasHeight, scale };
+			owner._regionalCanvasLayout = { x: canvasLeft, y: canvasTop, width: canvasWidth, height: canvasHeight, scale };
 
 			ctx.fillStyle = "#000000";
-			ctx.fillRect(canvasX - border, canvasY - border, canvasWidth + border * 2, canvasHeight + border * 2);
+			ctx.fillRect(canvasLeft - border, canvasTop - border, canvasWidth + border * 2, canvasHeight + border * 2);
 			ctx.fillStyle = globalThis.LiteGraph.NODE_DEFAULT_BGCOLOR;
-			ctx.fillRect(canvasX, canvasY, canvasWidth, canvasHeight);
+			ctx.fillRect(canvasLeft, canvasTop, canvasWidth, canvasHeight);
 
 			for (const [id, region] of activeRectEntries(state)) {
 				const rect = canvasToNodeRect(owner._regionalCanvasLayout, region);
@@ -448,12 +546,12 @@ function addColorCanvas(node) {
 
 			ctx.beginPath();
 			for (let x = 0; x <= width / canvasGridSize; x++) {
-				ctx.moveTo(canvasX + x * canvasGridSize * scale, canvasY);
-				ctx.lineTo(canvasX + x * canvasGridSize * scale, canvasY + canvasHeight);
+				ctx.moveTo(canvasLeft + x * canvasGridSize * scale, canvasTop);
+				ctx.lineTo(canvasLeft + x * canvasGridSize * scale, canvasTop + canvasHeight);
 			}
 			for (let y = 0; y <= height / canvasGridSize; y++) {
-				ctx.moveTo(canvasX, canvasY + y * canvasGridSize * scale);
-				ctx.lineTo(canvasX + canvasWidth, canvasY + y * canvasGridSize * scale);
+				ctx.moveTo(canvasLeft, canvasTop + y * canvasGridSize * scale);
+				ctx.lineTo(canvasLeft + canvasWidth, canvasTop + y * canvasGridSize * scale);
 			}
 			ctx.strokeStyle = "#00000050";
 			ctx.lineWidth = 1;
@@ -532,6 +630,30 @@ app.registerExtension({
 		nodeType.prototype.onResize = function (size) {
 			onResize?.apply(this, arguments);
 			computeCanvasSize(this, size);
+		};
+
+		const onConnectionsChange = nodeType.prototype.onConnectionsChange;
+		nodeType.prototype.onConnectionsChange = function () {
+			const result = onConnectionsChange?.apply(this, arguments);
+			applyCanvasControlValues(this, true);
+			return result;
+		};
+
+		const onExecuted = nodeType.prototype.onExecuted;
+		nodeType.prototype.onExecuted = function (message) {
+			const result = onExecuted?.apply(this, arguments);
+			if (message?.dims) {
+				const [width, height] = message.dims;
+				const state = ensureRectProperties(this);
+				state.canvas.width = normalizeCanvasDimension(width, state.canvas.width);
+				state.canvas.height = normalizeCanvasDimension(height, state.canvas.height);
+				setWidgetValue(getWidget(this, "width"), state.canvas.width);
+				setWidgetValue(getWidget(this, "height"), state.canvas.height);
+				clampActiveRegionRects(state);
+				computeCanvasSize(this, this.size);
+				setDirty(this);
+			}
+			return result;
 		};
 
 		const onMouseDown = nodeType.prototype.onMouseDown;

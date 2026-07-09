@@ -38,8 +38,8 @@ class RegionStateTests(unittest.TestCase):
                 "canvas": {"width": 512, "height": 512, "gridSize": 8},
                 "regions": {},
             },
-            canvas_x=100,
-            canvas_y=130,
+            canvas_width=100,
+            canvas_height=130,
             grid_size=999,
             active_regions=1,
         )

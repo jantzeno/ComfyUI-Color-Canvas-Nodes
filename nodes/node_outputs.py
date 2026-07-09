@@ -9,4 +9,5 @@ def rect_canvas_output(result) -> io.NodeOutput:
         result.colors,
         result.width,
         result.height,
+        ui={"dims": [result.width, result.height]},
     )
