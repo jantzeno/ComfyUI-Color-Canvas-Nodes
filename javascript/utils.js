@@ -84,22 +84,6 @@ export function getDrawColor(hue, alpha) {
 	return `#${f(0)}${f(8)}${f(4)}${alpha}`;
 }
 
-export function ensureRegionMap(node, factory) {
-	if (!node.properties) {
-		node.properties = {};
-	}
-	if (!node.properties.regions || typeof node.properties.regions !== "object") {
-		node.properties.regions = {};
-	}
-	for (let i = 1; i <= MAX_REGIONS; i++) {
-		const id = String(i);
-		if (!node.properties.regions[id]) {
-			node.properties.regions[id] = factory(i);
-		}
-	}
-	return node.properties.regions;
-}
-
 export function computeCanvasSize(node, size) {
 	const MIN_SIZE = 220;
 	const outputRows = Math.max(node.outputs?.length || 0, node.inputs?.length || 0);

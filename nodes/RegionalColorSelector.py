@@ -1,8 +1,6 @@
 from comfy_api.latest import io, ui
 
-
-COLOR_DICT = io.Custom("COLOR_DICT")
-MAX_REGIONS = 16
+from .constants import COLOR_DICT, MAX_REGIONS
 
 
 class RegionalColorSelector(io.ComfyNode):

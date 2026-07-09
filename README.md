@@ -35,9 +35,14 @@ Draws rectangular color regions and outputs:
 - `WIDTH`
 - `HEIGHT`
 
-The node stores its editable region state in workflow properties for workflow
-compatibility. Existing workflows using `properties.regions`, `width`, `height`,
-`activeRegions`, and `cellSize` continue to load.
+The node stores editable state in a namespaced workflow property:
+
+```text
+properties.regionalColor
+```
+
+Rectangular canvas nodes store `activeRegions`, `canvas`, and per-region
+`rect`/`color` data under that object.
 
 Controls:
 
@@ -71,11 +76,17 @@ For each active region, the frontend exposes:
 - `region_N_cells`
 - `region_N_rotation`
 
-The serialized workflow property remains `properties.regions[N].ratio` so older
-workflow state still has the same backend meaning. The canonical stored form is:
+The serialized workflow property is `properties.regionalColor`. Ratio nodes
+store each region as structured data:
 
-```text
-layout_weight,cell_weight,cell_weight;rotation
+```json
+{
+  "ratio": {
+    "layout": "1",
+    "cells": "1,1",
+    "rotation": 0
+  }
+}
 ```
 
 Examples:
@@ -87,10 +98,8 @@ Examples:
 4,6;0
 ```
 
-Legacy values such as `11`, `111`, `1234`, and comma-separated ratios are parsed
-on load and rewritten into the canonical form after editing. Rotation is stored
-for compatibility, but visual rotation rendering is still disabled in the
-backend.
+Rotation is stored for compatibility, but visual rotation rendering is still
+disabled in the backend.
 
 ### Regional Color Selector
 
@@ -104,6 +113,10 @@ execution.
 ## Development Notes
 
 - Backend nodes are registered by `comfy_entrypoint()`.
+- Backend node wrappers delegate to shared state, renderer, and output adapter
+  modules under `nodes/`.
+- Frontend node setup delegates to shared `state.js` and
+  `canvasInteractions.js` helpers under `javascript/`.
 - Public node IDs are stable:
   - `RegionalColorCanvas`
   - `RegionalColorRatio`

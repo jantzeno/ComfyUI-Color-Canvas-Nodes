@@ -4,45 +4,10 @@ import {
 	addNumberWidget,
 	addTextWidget,
 	clampInt,
-	ensureRegionMap,
 	getWidget,
 	setDirty,
 } from "./utils.js";
-
-function blankRegion() {
-	return { ratio: "1" };
-}
-
-function ensureRatioProperties(node) {
-	if (!node.properties) {
-		node.properties = {};
-	}
-	ensureRegionMap(node, blankRegion);
-	for (let i = 1; i <= MAX_REGIONS; i++) {
-		const id = String(i);
-		if (typeof node.properties.regions[id].ratio !== "string") {
-			node.properties.regions[id].ratio = String(node.properties.regions[id].ratio ?? "1");
-		}
-	}
-}
-
-function parseRatio(value) {
-	const text = String(value ?? "1").trim();
-	const [ratioPart, rotationPart = "0"] = text.split(";");
-	const parts = ratioPart.split(",").map((part) => part.trim()).filter(Boolean);
-	return {
-		layout: parts[0] || "1",
-		cells: parts.slice(1).join(",") || "1",
-		rotation: Number.isFinite(Number(rotationPart)) ? Number(rotationPart) : 0,
-	};
-}
-
-function canonicalRatio(layout, cells, rotation) {
-	const safeLayout = String(layout || "1").trim() || "1";
-	const safeCells = String(cells || "1").trim() || "1";
-	const safeRotation = Number.isFinite(Number(rotation)) ? Math.round(Number(rotation)) : 0;
-	return `${safeLayout},${safeCells};${safeRotation}`;
-}
+import { ensureRatioProperties } from "./state.js";
 
 function activeRegionCount(node) {
 	const widget = getWidget(node, "regions");
@@ -62,20 +27,25 @@ function removeRatioRowWidgets(node) {
 }
 
 function setRegionRatio(node, regionId) {
+	const state = ensureRatioProperties(node, activeRegionCount(node));
 	const layout = getWidget(node, `region_${regionId}_layout`)?.value;
 	const cells = getWidget(node, `region_${regionId}_cells`)?.value;
 	const rotation = getWidget(node, `region_${regionId}_rotation`)?.value;
-	node.properties.regions[String(regionId)].ratio = canonicalRatio(layout, cells, rotation);
+	state.regions[String(regionId)].ratio = {
+		layout: String(layout || "1").trim() || "1",
+		cells: String(cells || "1").trim() || "1",
+		rotation: Number.isFinite(Number(rotation)) ? Math.round(Number(rotation)) : 0,
+	};
 	setDirty(node);
 }
 
 function addRatioRows(node) {
 	removeRatioRowWidgets(node);
-	ensureRatioProperties(node);
+	const state = ensureRatioProperties(node, activeRegionCount(node));
 
 	const count = activeRegionCount(node);
 	for (let i = 1; i <= count; i++) {
-		const parsed = parseRatio(node.properties.regions[String(i)].ratio);
+		const parsed = state.regions[String(i)].ratio;
 
 		const layout = addTextWidget(node, `region_${i}_layout`, parsed.layout, function (_, __, owner) {
 			setRegionRatio(owner, i);
@@ -93,7 +63,11 @@ function addRatioRows(node) {
 		}, { min: -360, max: 360, step: 10, precision: 0 });
 		rotation._regionalRatioWidget = true;
 
-		node.properties.regions[String(i)].ratio = canonicalRatio(parsed.layout, parsed.cells, parsed.rotation);
+		state.regions[String(i)].ratio = {
+			layout: parsed.layout,
+			cells: parsed.cells,
+			rotation: parsed.rotation,
+		};
 	}
 
 	const baseHeight = 155;
@@ -112,7 +86,7 @@ app.registerExtension({
 		nodeType.prototype.onNodeCreated = function () {
 			const result = onNodeCreated?.apply(this, arguments);
 			this.serialize_widgets = true;
-			ensureRatioProperties(this);
+			ensureRatioProperties(this, activeRegionCount(this));
 
 			const regionCountWidget = getWidget(this, "regions");
 			if (regionCountWidget) {
@@ -120,6 +94,7 @@ app.registerExtension({
 				regionCountWidget.callback = (value, canvas, owner, pos, event) => {
 					originalCallback?.call(regionCountWidget, value, canvas, owner, pos, event);
 					regionCountWidget.value = clampInt(value, 1, MAX_REGIONS);
+					ensureRatioProperties(this, regionCountWidget.value);
 					addRatioRows(this);
 				};
 			}
@@ -131,7 +106,7 @@ app.registerExtension({
 		const onConfigure = nodeType.prototype.onConfigure;
 		nodeType.prototype.onConfigure = function () {
 			const result = onConfigure?.apply(this, arguments);
-			ensureRatioProperties(this);
+			ensureRatioProperties(this, activeRegionCount(this));
 			addRatioRows(this);
 			return result;
 		};
