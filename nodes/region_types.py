@@ -34,19 +34,6 @@ class RectRegion:
 
 
 @dataclass(frozen=True)
-class RatioSpec:
-    layout: str = "1"
-    cells: str = "1"
-    rotation: int = 0
-
-
-@dataclass(frozen=True)
-class RatioRegion:
-    region_id: str
-    ratio: RatioSpec
-
-
-@dataclass(frozen=True)
 class RectCanvasState:
     canvas: CanvasSize
     active_regions: int
@@ -54,25 +41,8 @@ class RectCanvasState:
 
 
 @dataclass(frozen=True)
-class RatioCanvasState:
-    canvas: CanvasSize
-    active_regions: int
-    divide_mode: str
-    regions: tuple[RatioRegion, ...]
-
-
-@dataclass(frozen=True)
 class RectRenderResult:
     image: object
-    colors: ColorMap
-    width: int
-    height: int
-
-
-@dataclass(frozen=True)
-class RatioRenderResult:
-    image: object
-    numbered_image: object
     colors: ColorMap
     width: int
     height: int

@@ -8,9 +8,6 @@ from .region_types import (
     MAX_REGIONS,
     MAX_RESOLUTION,
     CanvasSize,
-    RatioCanvasState,
-    RatioRegion,
-    RatioSpec,
     Rect,
     RectCanvasState,
     RectRegion,
@@ -101,42 +98,3 @@ def normalize_rect_state(props: dict) -> RectCanvasState:
         regions.append(RectRegion(str(region_id), _normalize_rect(values, canvas, region_id), color))
 
     return RectCanvasState(canvas, active_regions, tuple(regions))
-
-
-def normalize_ratio_spec(value) -> RatioSpec:
-    if isinstance(value, dict):
-        layout = str(value.get("layout") or "1").strip() or "1"
-        cells = str(value.get("cells") or "1").strip() or "1"
-        rotation = clamp_dimension(value.get("rotation"), default=0, max_value=360, min_value=-360)
-        return RatioSpec(layout, cells, rotation)
-
-    text = str(value or "1").strip() or "1"
-    ratio_part, _, rotation_part = text.partition(";")
-    parts = [part.strip() for part in ratio_part.split(",") if part.strip()]
-    layout = parts[0] if parts else "1"
-    cells = ",".join(parts[1:]) if len(parts) > 1 else "1"
-    rotation = clamp_dimension(rotation_part or 0, default=0, max_value=360, min_value=-360)
-    return RatioSpec(layout, cells, rotation)
-
-
-def normalize_ratio_state(
-    props: dict,
-    width: int,
-    height: int,
-    divide_mode: str,
-    active_regions: int,
-) -> RatioCanvasState:
-    canvas = normalize_canvas_size(width, height)
-    active_regions = normalize_region_count(active_regions)
-    divide_mode = divide_mode if divide_mode in {"rows", "columns"} else "rows"
-    raw_regions = props.get("regions")
-
-    regions = []
-    for region_id in range(1, active_regions + 1):
-        values = _region_values(raw_regions, region_id)
-        regions.append(RatioRegion(str(region_id), normalize_ratio_spec(values.get("ratio"))))
-
-    if not regions:
-        regions = [RatioRegion("1", RatioSpec())]
-
-    return RatioCanvasState(canvas, active_regions, divide_mode, tuple(regions))

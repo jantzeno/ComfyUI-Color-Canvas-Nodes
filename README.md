@@ -60,47 +60,6 @@ Controls:
 All direct canvas edits snap to `cell size`, clamp to the canvas bounds, and keep
 the numeric widgets synchronized.
 
-### Regional Color Ratio
-
-Builds color layouts from structured ratio rows and outputs:
-
-- `IMAGE`
-- `IMAGE (numbered)`
-- `COLOR_DICT`
-- `WIDTH`
-- `HEIGHT`
-
-For each active region, the frontend exposes:
-
-- `region_N_layout`
-- `region_N_cells`
-- `region_N_rotation`
-
-The serialized workflow property is `properties.regionalColor`. Ratio nodes
-store each region as structured data:
-
-```json
-{
-  "ratio": {
-    "layout": "1",
-    "cells": "1,1",
-    "rotation": 0
-  }
-}
-```
-
-Examples:
-
-```text
-1,1;0
-1,1,1;0
-2,1,1;0
-4,6;0
-```
-
-Rotation is stored for compatibility, but visual rotation rendering is still
-disabled in the backend.
-
 ### Regional Color Selector
 
 Selects one color from a `COLOR_DICT` input by `region_id` and outputs:
@@ -119,7 +78,6 @@ execution.
   `canvasInteractions.js` helpers under `javascript/`.
 - Public node IDs are stable:
   - `RegionalColorCanvas`
-  - `RegionalColorRatio`
   - `RegionalColorSelector`
 - Frontend extensions import ComfyUI scripts with supported relative paths such
   as `../../scripts/app.js`.

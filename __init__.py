@@ -4,7 +4,6 @@
 from comfy_api.latest import ComfyExtension, io
 
 from .nodes.RegionalColorCanvas import RegionalColorCanvas
-from .nodes.RegionalColorRatio import RegionalColorRatio
 from .nodes.RegionalColorSelector import RegionalColorSelector
 
 
@@ -16,7 +15,6 @@ class RegionalColorExtension(ComfyExtension):
         return [
             RegionalColorCanvas,
             RegionalColorSelector,
-            RegionalColorRatio,
         ]
 
 

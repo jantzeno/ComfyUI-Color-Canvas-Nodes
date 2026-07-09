@@ -10,13 +10,3 @@ def rect_canvas_output(result) -> io.NodeOutput:
         result.width,
         result.height,
     )
-
-
-def ratio_canvas_output(result) -> io.NodeOutput:
-    return io.NodeOutput(
-        pil2tensor(result.image.convert("RGB")),
-        pil2tensor(result.numbered_image.convert("RGB")),
-        result.colors,
-        result.width,
-        result.height,
-    )
