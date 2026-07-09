@@ -1,89 +1,112 @@
-# Region Color Nodes for [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
+# Regional Color Nodes for ComfyUI
 
-## Installation:
+Custom nodes for building color-coded regional masks and selecting region colors in
+[ComfyUI](https://github.com/comfyanonymous/ComfyUI).
 
-- Navigate to the `/ComfyUI/custom_nodes/` folder
-- `git clone https://github.com/jantzeno/ComfyUI_Color_Canvas_Nodes`
-- Start ComfyUI
-  - all require file should be downloaded/copied from there.
-  - no need to manually copy/paste .js files anymore
+## Requirements
 
----
+- ComfyUI v0.27.0 or newer.
+- No additional Python dependencies.
 
-# Todo: Update README
+This package uses the ComfyUI V3 `comfy_api.latest` node API. Older ComfyUI
+versions that only support `NODE_CLASS_MAPPINGS` are not supported.
 
-## Regional Color Canvas
+## Installation
 
-Grid based canvas to visualize regions. Outputs an image and dictionary of colors.
+Clone this repository into `ComfyUI/custom_nodes/` and restart ComfyUI:
 
-<details close="close">
-    <summary>Right click menu to add/remove/swap layers:</summary>
-    <img src="./images/RightClickMenu.png">
-</details>
-Display what node is associated with current input selected
+```bash
+cd ComfyUI/custom_nodes
+git clone https://github.com/jantzeno/ComfyUI_Color_Canvas_Nodes
+```
 
-<img src="./images/MultiAreaConditioning_node.png" width="500px">
+The JavaScript extension is served through `WEB_DIRECTORY = "./javascript"`.
+There is no manual JavaScript copy step, and the plugin does not write files into
+ComfyUI's core `web/extensions` directory.
 
-this also come with a <strong>ConditioningUpscale</strong> node.  
-useseful for hires fix workflow
+## Nodes
 
-<img src="./images/ConditioningUpscale_node.png" width="500px">
-<details close="close">
-    <summary>Result example:</summary>
-    <img src="./images/MultiAreaConditioning_result.png" width="500px">
-</details>
-<details close="close">
-    <summary>Workflow example:</summary>
-    <img src="./images/MultiAreaConditioning_workflow.svg" width="100%">
-</details>
+### Regional Color Canvas
 
-## Regional Color Ratio
+Draws rectangular color regions and outputs:
 
-Specify regions based on rows or columns and the ratio of regions in that section.
-11 -> 1+1=2, two regions, 50% | 50%
-111 => 1+1+1=3, three regions, 33% | 33% | 33%
-1234 => 1+2+3+4=10, four regions, 10% | 20% | 30% | 40%
+- `IMAGE`
+- `COLOR_DICT`
+- `WIDTH`
+- `HEIGHT`
 
-## Visual Examples
+The node stores its editable region state in workflow properties for workflow
+compatibility. Existing workflows using `properties.regions`, `width`, `height`,
+`activeRegions`, and `cellSize` continue to load.
 
-11
-111
-1234
+Controls:
 
-211
-46
+- `canvasX` and `canvasY` set the generated image size.
+- `regions` sets the active integer region count.
+- `cell size` controls grid snapping.
+- `region` selects the active region for precision edits.
+- `x`, `y`, `width`, and `height` mirror the selected rectangle.
+- Click a visible active rectangle to select it.
+- Drag inside the selected rectangle to move it.
+- Drag a selected rectangle edge or corner handle to resize it.
+- Newly active regions get a recalculated default visible rectangle instead of starting hidden.
+- Reducing the region count hides inactive regions; adding them again gives them fresh default placement.
 
-1
-1
-111
+All direct canvas edits snap to `cell size`, clamp to the canvas bounds, and keep
+the numeric widgets synchronized.
 
-11
-23
-32
+### Regional Color Ratio
 
----
+Builds color layouts from structured ratio rows and outputs:
 
-## Regional Color Selector
+- `IMAGE`
+- `IMAGE (numbered)`
+- `COLOR_DICT`
+- `WIDTH`
+- `HEIGHT`
 
-Select the region and output regions hex color.
+For each active region, the frontend exposes:
 
-<details close="close">
-    <summary>Right click menu to add/remove/swap layers:</summary>
-    <img src="./images/RightClickMenu.png">
-</details>
-Display what node is associated with current input selected
+- `region_N_layout`
+- `region_N_cells`
+- `region_N_rotation`
 
-<img src="./images/MultiLatentComposite_node.png" width="500px">
+The serialized workflow property remains `properties.regions[N].ratio` so older
+workflow state still has the same backend meaning. The canonical stored form is:
 
-<details close="close">
-    <summary>Result example:</summary>
-    <img src="./images/MultiLatentComposite_result.png" width="500px">
-</details>
-<details close="close">
-    <summary>Workflow example:</summary>
-    <img src="./images/MultiLatentComposite_workflow.svg" width="100%">
-</details>
+```text
+layout_weight,cell_weight,cell_weight;rotation
+```
 
----
+Examples:
 
-# Known issues
+```text
+1,1;0
+1,1,1;0
+2,1,1;0
+4,6;0
+```
+
+Legacy values such as `11`, `111`, `1234`, and comma-separated ratios are parsed
+on load and rewritten into the canonical form after editing. Rotation is stored
+for compatibility, but visual rotation rendering is still disabled in the
+backend.
+
+### Regional Color Selector
+
+Selects one color from a `COLOR_DICT` input by `region_id` and outputs:
+
+- `COLOR_HEX`
+
+The node is an output node and displays the selected hex value in the UI after
+execution.
+
+## Development Notes
+
+- Backend nodes are registered by `comfy_entrypoint()`.
+- Public node IDs are stable:
+  - `RegionalColorCanvas`
+  - `RegionalColorRatio`
+  - `RegionalColorSelector`
+- Frontend extensions import ComfyUI scripts with supported relative paths such
+  as `../../scripts/app.js`.

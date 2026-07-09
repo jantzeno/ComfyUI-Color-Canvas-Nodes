@@ -1,30 +1,34 @@
-class RegionalColorSelector:
+from comfy_api.latest import io, ui
+
+
+COLOR_DICT = io.Custom("COLOR_DICT")
+MAX_REGIONS = 16
+
+
+class RegionalColorSelector(io.ComfyNode):
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="RegionalColorSelector",
+            display_name="Regional Color Selector",
+            category="Regional Colors",
+            description="Select a region color from a Regional Colors dictionary.",
+            is_output_node=True,
+            inputs=[
+                COLOR_DICT.Input("color_dict"),
+                io.Int.Input("region_id", default=1, min=1, max=MAX_REGIONS),
+            ],
+            outputs=[
+                io.String.Output(display_name="COLOR_HEX"),
+            ],
+        )
 
     @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "color_dict": ("COLOR_DICT",),
-                "region_id": ("INT", {"default": 1, "min": 1, "max": 16}),
-            },
-        }
-
-    # INPUT_IS_LIST = True
-    RETURN_TYPES = ("STRING", )
-    RETURN_NAMES = ("COLOR_HEX", )
-    FUNCTION = "doStuff"
-    OUTPUT_NODE = True
-
-    CATEGORY = "Regional Colors"
-
-    def doStuff(self, color_dict, region_id):
-
+    def execute(cls, color_dict: dict, region_id: int) -> io.NodeOutput:
         color = "error"
-        id = str(region_id)
+        region_key = str(region_id)
 
-        if region_id > 16 or region_id < 1:
-            pass
-        elif id in color_dict:
-            color = color_dict[id]
+        if 1 <= int(region_id) <= MAX_REGIONS and isinstance(color_dict, dict):
+            color = color_dict.get(region_key, color)
 
-        return {"ui": {"text": (color, )}, "result": (color, )}
+        return io.NodeOutput(color, ui=ui.PreviewText(color))

@@ -5,6 +5,8 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
+DEFAULT_MAX_DIMENSION = 16384
+
 
 def tensor2pil(image):
     return Image.fromarray(np.clip(255. * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
@@ -14,10 +16,43 @@ def pil2tensor(image):
     return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
 
 
+def clamp_dimension(value, default=512, max_value=DEFAULT_MAX_DIMENSION, min_value=1):
+    try:
+        value = int(round(float(value)))
+    except (TypeError, ValueError):
+        value = default
+
+    value = max(min_value, value)
+    if max_value is not None:
+        value = min(max_value, value)
+    return value
+
+
+def get_workflow_node_properties(hidden, defaults=None):
+    props = dict(defaults or {})
+    extra_pnginfo = getattr(hidden, "extra_pnginfo", None) or {}
+    unique_id = getattr(hidden, "unique_id", None)
+
+    try:
+        target_id = int(unique_id)
+    except (TypeError, ValueError):
+        return props
+
+    workflow = extra_pnginfo.get("workflow") or {}
+    for node in workflow.get("nodes") or []:
+        if node.get("id") == target_id:
+            node_props = node.get("properties") or {}
+            if isinstance(node_props, dict):
+                props.update(node_props)
+            break
+
+    return props
+
+
 def toInt(value):
     try:
         return int(value)
-    except ValueError:
+    except (TypeError, ValueError):
         return 0
 
 
@@ -62,9 +97,9 @@ def process_regions(regions, drawColor):
 
     layout = []
     region_data = {}
-    rotate = 0
     template = {"cells": "", "cell_ratios": [], "colors": []}
     for r, d in regions.items():
+        rotate = 0
         region_txt = d["ratio"]
         region_txt = region_txt.strip(alphabet)
         region_txt = region_txt.strip(special_characters)

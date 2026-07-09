@@ -1,73 +1,120 @@
 # Originally MultiAreaConditioning by Davemane42#0042 for ComfyUI
 # Forked by jantzeno
 
-from .utils import pil2tensor
 from PIL import Image, ImageDraw
+from comfy_api.latest import io
+
+from .utils import clamp_dimension, get_draw_color, get_workflow_node_properties, pil2tensor
 
 
-class RegionalColorCanvas:
+COLOR_DICT = io.Custom("COLOR_DICT")
+MAX_REGIONS = 16
+DEFAULT_CELL_SIZE = 64
+DEFAULT_REGION_CELLS = 2
+
+
+def _blank_regions():
+    return {
+        str(i): {"x": 0, "y": 0, "width": 0, "height": 0, "color": ""}
+        for i in range(1, MAX_REGIONS + 1)
+    }
+
+
+def _default_region_rect(canvas_x, canvas_y, region_id):
+    width = min(canvas_x, DEFAULT_CELL_SIZE * DEFAULT_REGION_CELLS)
+    height = min(canvas_y, DEFAULT_CELL_SIZE * DEFAULT_REGION_CELLS)
+    max_x = max(0, canvas_x - width)
+    max_y = max(0, canvas_y - height)
+    columns = max(1, canvas_x // max(1, width))
+    index = max(0, int(region_id) - 1)
+    x = min(max_x, (index % columns) * width)
+    y = min(max_y, (index // columns) * height)
+    return x, y, width, height
+
+
+def _safe_color(value):
+    if isinstance(value, str) and len(value) == 7 and value.startswith("#"):
+        try:
+            int(value[1:], 16)
+            return value
+        except ValueError:
+            pass
+    return "#000000"
+
+
+class RegionalColorCanvas(io.ComfyNode):
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="RegionalColorCanvas",
+            display_name="Regional Color Canvas",
+            category="Regional Colors",
+            description="Draw rectangular color regions from the node canvas.",
+            hidden=[io.Hidden.extra_pnginfo, io.Hidden.unique_id],
+            outputs=[
+                io.Image.Output(display_name="IMAGE"),
+                COLOR_DICT.Output(display_name="COLOR_DICT"),
+                io.Int.Output(display_name="WIDTH"),
+                io.Int.Output(display_name="HEIGHT"),
+            ],
+        )
 
     @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {},
-            "optional": {},
-            "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
-        }
+    def execute(cls) -> io.NodeOutput:
+        props = get_workflow_node_properties(
+            cls.hidden,
+            {
+                "regions": _blank_regions(),
+                "activeRegions": 1,
+                "width": 512,
+                "height": 512,
+            },
+        )
 
-    RETURN_TYPES = ("IMAGE", "COLOR_DICT", "INT", "INT")
-    RETURN_NAMES = ("IMAGE", "COLOR_DICT", "WIDTH", "HEIGHT")
-    FUNCTION = "doStuff"
-    CATEGORY = "Regional Colors"
+        regions = props.get("regions")
+        if not isinstance(regions, dict):
+            regions = _blank_regions()
 
-    def doStuff(self, extra_pnginfo, unique_id):
+        active_regions = clamp_dimension(props.get("activeRegions"), default=1, max_value=MAX_REGIONS)
+        canvas_x = clamp_dimension(props.get("width"), default=512)
+        canvas_y = clamp_dimension(props.get("height"), default=512)
 
-        regions = []
-        active_regions = 0
-        canvasX = 512
-        canvasY = 512
+        output_regions = []
+        for region_id, values in regions.items():
+            if not isinstance(values, dict):
+                continue
+            try:
+                numeric_id = int(region_id)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= numeric_id <= active_regions:
+                output_regions.append((numeric_id, str(numeric_id), values))
 
-        for node in extra_pnginfo["workflow"]["nodes"]:
-            if node["id"] == int(unique_id):
-                regions = node["properties"]["regions"]
-                active_regions = node["properties"]["activeRegions"]
-                canvasX = node["properties"]["width"]
-                canvasY = node["properties"]["height"]
-                break
+        output_regions.sort(key=lambda item: item[0])
 
-        # filter only active regions
-        output_regions = {k: v for k,
-                          v in regions.items() if int(k) <= active_regions}
-
-        # ensure regions are sorted
-        # regions are stacked from first to last
-        output_regions = dict(sorted(output_regions.items()))
-
-        image = Image.new("RGB", (canvasX, canvasY))
+        image = Image.new("RGB", (canvas_x, canvas_y))
         draw = ImageDraw.Draw(image)
-
         color_map = {}
 
-        for region, values in output_regions.items():
+        for _, region_id, values in output_regions:
+            x = clamp_dimension(values.get("x"), default=0, max_value=canvas_x, min_value=0)
+            y = clamp_dimension(values.get("y"), default=0, max_value=canvas_y, min_value=0)
+            width = clamp_dimension(values.get("width"), default=0, max_value=canvas_x, min_value=0)
+            height = clamp_dimension(values.get("height"), default=0, max_value=canvas_y, min_value=0)
+            if width == 0 or height == 0:
+                x, y, width, height = _default_region_rect(canvas_x, canvas_y, region_id)
 
-            x, y = values["x"], values["y"]
-            w, h = values["width"], values["height"]
-            color = values["color"]
+            color = _safe_color(values.get("color") or get_draw_color(int(region_id) * 199, "FF")[:7])
 
-            color_map[region] = color
+            color_map[region_id] = color
 
-            if x+w > canvasX:
-                w = max(0, canvasX-x)
-
-            if y+h > canvasY:
-                h = max(0, canvasY-y)
-
-            if w == 0 or h == 0:
+            if x + width > canvas_x:
+                width = max(0, canvas_x - x)
+            if y + height > canvas_y:
+                height = max(0, canvas_y - y)
+            if width == 0 or height == 0:
                 continue
 
-            draw.rectangle([x, y, x+w, y+h], fill=color)
+            draw.rectangle([x, y, x + width, y + height], fill=color)
 
-        image_out = pil2tensor(image.convert("RGB"))
-
-        return (image_out, color_map, canvasX, canvasY)
-# ----------
+        return io.NodeOutput(pil2tensor(image.convert("RGB")), color_map, canvas_x, canvas_y)
