@@ -42,23 +42,27 @@ properties.regionalColor
 ```
 
 Rectangular canvas nodes store `activeRegions`, `canvas`, and per-region
-`rect`/`color` data under that object.
+`rect`/`color` data under that object. The canvas object contains `width`,
+`height`, and `gridSize`; the selected row is stored as `selectedRegion`.
 
 Controls:
 
-- `canvasX` and `canvasY` set the generated image size.
+- `canvasX` and `canvasY` set the generated image size in 64-pixel steps to match common latent presets.
+- `grid size` controls grid rendering and snap precision with values `8`, `16`, `32`, or `64`.
 - `regions` sets the active integer region count.
-- `cell size` controls grid snapping.
-- `region` selects the active region for precision edits.
-- `x`, `y`, `width`, and `height` mirror the selected rectangle.
-- Click a visible active rectangle to select it.
+- `canvasX`, `canvasY`, `grid size`, and `regions` are standard connectable ComfyUI widgets.
+- The compact region table shows every active region with color, id, `x`, `y`,
+  `w`, and `h` columns.
+- Click a table row or visible active rectangle to select it.
+- Click a table numeric cell and type a value to edit that rectangle directly.
 - Drag inside the selected rectangle to move it.
 - Drag a selected rectangle edge or corner handle to resize it.
 - Newly active regions get a recalculated default visible rectangle instead of starting hidden.
 - Reducing the region count hides inactive regions; adding them again gives them fresh default placement.
 
-All direct canvas edits snap to `cell size`, clamp to the canvas bounds, and keep
-the numeric widgets synchronized.
+Canvas dragging, resizing, and table numeric edits snap to `grid size` and clamp
+to the canvas bounds. Changing `grid size` resnaps all active rectangles to the
+new grid.
 
 ### Regional Color Selector
 

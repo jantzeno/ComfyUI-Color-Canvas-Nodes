@@ -1,6 +1,6 @@
 import {
-	MAX_CELL_SIZE,
-	MIN_CELL_SIZE,
+	MAX_GRID_SIZE,
+	MIN_GRID_SIZE,
 	clamp,
 	snap,
 } from "./utils.js";
@@ -87,7 +87,7 @@ export function drawHandles(ctx, rect) {
 export function applyRectDrag(state, drag, canvasPoint) {
 	const region = state.regions[drag.regionId];
 	const rect = region.rect;
-	const cellSize = clamp(state.canvas.cellSize, MIN_CELL_SIZE, MAX_CELL_SIZE);
+	const gridSize = clamp(state.canvas.gridSize, MIN_GRID_SIZE, MAX_GRID_SIZE);
 	const dx = canvasPoint.x - drag.start.x;
 	const dy = canvasPoint.y - drag.start.y;
 	const original = drag.original;
@@ -97,24 +97,24 @@ export function applyRectDrag(state, drag, canvasPoint) {
 	let height = original.height;
 
 	if (drag.action === "move") {
-		x = clamp(snap(original.x + dx, cellSize), 0, state.canvas.width - original.width);
-		y = clamp(snap(original.y + dy, cellSize), 0, state.canvas.height - original.height);
+		x = clamp(snap(original.x + dx, gridSize), 0, state.canvas.width - original.width);
+		y = clamp(snap(original.y + dy, gridSize), 0, state.canvas.height - original.height);
 	} else {
 		if (drag.action.includes("w")) {
 			const right = original.x + original.width;
-			x = clamp(snap(original.x + dx, cellSize), 0, right);
+			x = clamp(snap(original.x + dx, gridSize), 0, right);
 			width = right - x;
 		}
 		if (drag.action.includes("e")) {
-			width = clamp(snap(original.width + dx, cellSize), 0, state.canvas.width - original.x);
+			width = clamp(snap(original.width + dx, gridSize), 0, state.canvas.width - original.x);
 		}
 		if (drag.action.includes("n")) {
 			const bottom = original.y + original.height;
-			y = clamp(snap(original.y + dy, cellSize), 0, bottom);
+			y = clamp(snap(original.y + dy, gridSize), 0, bottom);
 			height = bottom - y;
 		}
 		if (drag.action.includes("s")) {
-			height = clamp(snap(original.height + dy, cellSize), 0, state.canvas.height - original.y);
+			height = clamp(snap(original.height + dy, gridSize), 0, state.canvas.height - original.y);
 		}
 	}
 

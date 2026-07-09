@@ -1,6 +1,10 @@
 export const MAX_REGIONS = 16;
-export const MIN_CELL_SIZE = 8;
-export const MAX_CELL_SIZE = 64;
+export const MIN_RESOLUTION = 64;
+export const MAX_RESOLUTION = 16384;
+export const DIMENSION_STEP = 64;
+export const MIN_GRID_SIZE = 8;
+export const MAX_GRID_SIZE = 64;
+export const GRID_SIZE_VALUES = [8, 16, 32, 64];
 
 export function clamp(value, min, max) {
 	const numeric = Number.isFinite(Number(value)) ? Number(value) : min;
@@ -16,58 +20,23 @@ export function snap(value, step) {
 	return Math.round(value / snapStep) * snapStep;
 }
 
+export function nearestAllowed(value, allowedValues) {
+	const numeric = Number(value);
+	const fallback = allowedValues[0];
+	const target = Number.isFinite(numeric) ? numeric : fallback;
+	return allowedValues.reduce((best, candidate) => {
+		const bestDistance = Math.abs(best - target);
+		const candidateDistance = Math.abs(candidate - target);
+		return candidateDistance < bestDistance ? candidate : best;
+	}, fallback);
+}
+
 export function getWidget(node, name) {
 	return node.widgets?.find((widget) => widget.name === name);
 }
 
-export function setWidgetValue(node, name, value) {
-	const widget = getWidget(node, name);
-	if (widget) {
-		widget.value = value;
-	}
-}
-
 export function setDirty(node) {
 	node.graph?.setDirtyCanvas(true, true);
-}
-
-export function addNumberWidget(node, name, value, callback, config = {}) {
-	let widget = getWidget(node, name);
-	if (!widget) {
-		widget = node.addWidget(
-			"number",
-			name,
-			value,
-			callback,
-			Object.assign({ min: 0, max: 4096, step: 10, precision: 0 }, config)
-		);
-	} else {
-		widget.callback = callback;
-		widget.options = Object.assign({}, widget.options || {}, config);
-		if (widget.value == null) {
-			widget.value = value;
-		}
-	}
-	return widget;
-}
-
-export function addTextWidget(node, name, value, callback, config = {}) {
-	let widget = getWidget(node, name);
-	if (!widget) {
-		widget = node.addWidget(
-			"text",
-			name,
-			value,
-			callback,
-			Object.assign({ multiline: false }, config)
-		);
-	} else {
-		widget.callback = callback;
-		if (widget.value == null) {
-			widget.value = value;
-		}
-	}
-	return widget;
 }
 
 export function getDrawColor(hue, alpha) {

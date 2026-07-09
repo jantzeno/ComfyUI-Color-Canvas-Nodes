@@ -1,18 +1,31 @@
 import {
-	MAX_CELL_SIZE,
+	DIMENSION_STEP,
+	GRID_SIZE_VALUES,
+	MAX_GRID_SIZE,
 	MAX_REGIONS,
-	MIN_CELL_SIZE,
+	MAX_RESOLUTION,
+	MIN_GRID_SIZE,
+	MIN_RESOLUTION,
 	clamp,
 	clampInt,
 	getDrawColor,
+	nearestAllowed,
+	snap,
 } from "./utils.js";
 
 export const REGIONAL_COLOR_VERSION = 1;
 export const DEFAULT_WIDTH = 512;
 export const DEFAULT_HEIGHT = 512;
-export const DEFAULT_CELL_SIZE = 64;
+export const DEFAULT_GRID_SIZE = 32;
 export const DEFAULT_REGION_CELLS = 2;
-export const MAX_RESOLUTION = 16384;
+
+export function normalizeCanvasDimension(value, fallback) {
+	return clamp(snap(clamp(value ?? fallback, MIN_RESOLUTION, MAX_RESOLUTION), DIMENSION_STEP), MIN_RESOLUTION, MAX_RESOLUTION);
+}
+
+export function normalizeGridSize(value) {
+	return nearestAllowed(clamp(value ?? DEFAULT_GRID_SIZE, MIN_GRID_SIZE, MAX_GRID_SIZE), GRID_SIZE_VALUES);
+}
 
 export function setProperty(node, key, value) {
 	if (node.setProperty) {
@@ -39,6 +52,7 @@ export function ensureRegionalColor(node) {
 		state.regions = {};
 	}
 	state.activeRegions = clampInt(state.activeRegions ?? 1, 1, MAX_REGIONS);
+	state.selectedRegion = String(clampInt(state.selectedRegion ?? 1, 1, state.activeRegions));
 	return state;
 }
 
@@ -46,11 +60,79 @@ export function rectColor(id) {
 	return getDrawColor(id * 199, "FF").slice(0, 7);
 }
 
-export function defaultRegionRect(state, id) {
-	const width = Math.min(state.canvas.width, state.canvas.cellSize * DEFAULT_REGION_CELLS);
-	const height = Math.min(state.canvas.height, state.canvas.cellSize * DEFAULT_REGION_CELLS);
+function rectIsVisible(rect) {
+	return (Number(rect?.width) || 0) > 0 && (Number(rect?.height) || 0) > 0;
+}
+
+function rectsIntersect(first, second) {
+	return !(
+		first.x + first.width <= second.x ||
+		second.x + second.width <= first.x ||
+		first.y + first.height <= second.y ||
+		second.y + second.height <= first.y
+	);
+}
+
+function existingVisibleRects(state, excludedId) {
+	const activeRegions = clampInt(state.activeRegions ?? 1, 1, MAX_REGIONS);
+	const rects = [];
+	for (let i = 1; i <= activeRegions; i++) {
+		const id = String(i);
+		if (id === String(excludedId)) {
+			continue;
+		}
+		const rect = state.regions[id]?.rect;
+		if (rectIsVisible(rect)) {
+			rects.push(rect);
+		}
+	}
+	return rects;
+}
+
+function firstFreeRect(state, width, height, existingRects) {
 	const maxX = Math.max(0, state.canvas.width - width);
 	const maxY = Math.max(0, state.canvas.height - height);
+	for (let y = 0; y <= maxY; y += state.canvas.gridSize) {
+		for (let x = 0; x <= maxX; x += state.canvas.gridSize) {
+			const candidate = { x, y, width, height };
+			if (!existingRects.some((rect) => rectsIntersect(candidate, rect))) {
+				return candidate;
+			}
+		}
+	}
+	return null;
+}
+
+export function defaultRegionRect(state, id) {
+	const width = Math.min(state.canvas.width, state.canvas.gridSize * DEFAULT_REGION_CELLS);
+	const height = Math.min(state.canvas.height, state.canvas.gridSize * DEFAULT_REGION_CELLS);
+	const maxX = Math.max(0, state.canvas.width - width);
+	const maxY = Math.max(0, state.canvas.height - height);
+	const existingRects = existingVisibleRects(state, id);
+	const freeRect = firstFreeRect(state, width, height, existingRects);
+	if (freeRect) {
+		return freeRect;
+	}
+
+	if (existingRects.length) {
+		const latest = existingRects[existingRects.length - 1];
+		let x = latest.x + state.canvas.gridSize;
+		let y = latest.y;
+		if (x > maxX) {
+			x = 0;
+			y = latest.y + state.canvas.gridSize;
+		}
+		if (y > maxY) {
+			y = 0;
+		}
+		return {
+			x: Math.min(maxX, x),
+			y: Math.min(maxY, y),
+			width,
+			height,
+		};
+	}
+
 	const columns = Math.max(1, Math.floor(state.canvas.width / Math.max(1, width)));
 	const index = Math.max(0, Number(id) - 1);
 	return {
@@ -70,9 +152,10 @@ export function blankRectRegion(id) {
 
 export function ensureRectProperties(node) {
 	const state = ensureRegionalColor(node);
-	state.canvas.width = clamp(state.canvas.width ?? DEFAULT_WIDTH, 1, MAX_RESOLUTION);
-	state.canvas.height = clamp(state.canvas.height ?? DEFAULT_HEIGHT, 1, MAX_RESOLUTION);
-	state.canvas.cellSize = clamp(state.canvas.cellSize ?? DEFAULT_CELL_SIZE, MIN_CELL_SIZE, MAX_CELL_SIZE);
+	state.canvas.width = normalizeCanvasDimension(state.canvas.width, DEFAULT_WIDTH);
+	state.canvas.height = normalizeCanvasDimension(state.canvas.height, DEFAULT_HEIGHT);
+	state.canvas.gridSize = normalizeGridSize(state.canvas.gridSize);
+	state.selectedRegion = String(clampInt(state.selectedRegion ?? 1, 1, state.activeRegions));
 
 	for (let i = 1; i <= MAX_REGIONS; i++) {
 		const id = String(i);
@@ -133,8 +216,14 @@ export function activeRectEntries(state) {
 
 export function selectedRectRegion(node) {
 	const state = ensureRectProperties(node);
-	const widgetValue = node.widgets?.find((widget) => widget.name === "region")?.value;
 	const activeRegions = clampInt(state.activeRegions ?? 1, 1, MAX_REGIONS);
-	const id = String(clampInt(widgetValue ?? 1, 1, activeRegions));
+	const id = String(clampInt(state.selectedRegion ?? 1, 1, activeRegions));
+	state.selectedRegion = id;
 	return state.regions[id];
+}
+
+export function selectRectRegion(node, regionId) {
+	const state = ensureRectProperties(node);
+	state.selectedRegion = String(clampInt(regionId, 1, state.activeRegions));
+	return state.regions[state.selectedRegion];
 }
