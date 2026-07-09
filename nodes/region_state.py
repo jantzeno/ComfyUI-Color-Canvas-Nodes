@@ -99,16 +99,14 @@ def default_region_rect(canvas: CanvasSize, region_id: int, existing_rects: tupl
     if free_rect:
         return free_rect
 
+    fallback_width = min(canvas.width, canvas.grid_size)
+    fallback_height = min(canvas.height, canvas.grid_size)
+    fallback_rect = _first_free_rect(canvas, fallback_width, fallback_height, visible_existing)
+    if fallback_rect:
+        return fallback_rect
+
     if visible_existing:
-        latest = visible_existing[-1]
-        x = latest.x + canvas.grid_size
-        y = latest.y
-        if x > max_x:
-            x = 0
-            y = latest.y + canvas.grid_size
-        if y > max_y:
-            y = 0
-        return Rect(min(max_x, x), min(max_y, y), width, height)
+        return Rect(0, 0, 0, 0)
 
     columns = max(1, canvas.width // max(1, width))
     index = max(0, int(region_id) - 1)
@@ -150,12 +148,16 @@ def _normalize_rect(values: dict, canvas: CanvasSize, region_id: int, existing_r
 
     max_width = max(0, canvas.width - rect.x)
     max_height = max(0, canvas.height - rect.y)
-    return Rect(
+    normalized = Rect(
         min(rect.x, canvas.width),
         min(rect.y, canvas.height),
         min(rect.width, max_width),
         min(rect.height, max_height),
     )
+    if _rect_is_visible(normalized) and any(_rects_intersect(normalized, existing) for existing in existing_rects):
+        visible_existing = tuple(rect for rect in existing_rects if _rect_is_visible(rect))
+        return _first_free_rect(canvas, normalized.width, normalized.height, visible_existing) or default_region_rect(canvas, region_id, existing_rects)
+    return normalized
 
 
 def normalize_rect_state(props: dict, canvas_x=None, canvas_y=None, grid_size=None, active_regions=None) -> RectCanvasState:

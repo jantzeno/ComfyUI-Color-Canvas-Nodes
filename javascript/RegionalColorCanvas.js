@@ -21,9 +21,12 @@ import {
 	ensureRectProperties,
 	ensureVisibleRectRegions,
 	hideInactiveRectRegions,
+	normalizeRectToCanvas,
 	normalizeCanvasDimension,
 	normalizeGridSize,
 	rectColor,
+	rectOverlapsActive,
+	resolveActiveRectOverlaps,
 	selectRectRegion,
 	selectedRectRegion,
 } from "./state.js";
@@ -74,17 +77,14 @@ function clampRegionRect(state, regionId) {
 	if (!region?.rect) {
 		return;
 	}
-	const rect = region.rect;
-	rect.x = clamp(snap(rect.x ?? 0, gridSize(state)), 0, state.canvas.width);
-	rect.y = clamp(snap(rect.y ?? 0, gridSize(state)), 0, state.canvas.height);
-	rect.width = clamp(snap(rect.width ?? 0, gridSize(state)), 0, state.canvas.width - rect.x);
-	rect.height = clamp(snap(rect.height ?? 0, gridSize(state)), 0, state.canvas.height - rect.y);
+	region.rect = normalizeRectToCanvas(state, region.rect);
 }
 
 function clampActiveRegionRects(state) {
 	for (let i = 1; i <= state.activeRegions; i++) {
 		clampRegionRect(state, i);
 	}
+	resolveActiveRectOverlaps(state);
 }
 
 function gridWidget(node) {
@@ -135,18 +135,25 @@ function updateRegionValue(node, regionId, key, value) {
 	}
 
 	const rect = region.rect;
+	const candidate = { ...rect };
 	const snapped = snap(value, gridSize(state));
 	if (key === "x") {
-		rect.x = clamp(snapped, 0, state.canvas.width);
-		rect.width = clamp(rect.width, 0, state.canvas.width - rect.x);
+		candidate.x = clamp(snapped, 0, state.canvas.width);
+		candidate.width = clamp(candidate.width, 0, state.canvas.width - candidate.x);
 	} else if (key === "y") {
-		rect.y = clamp(snapped, 0, state.canvas.height);
-		rect.height = clamp(rect.height, 0, state.canvas.height - rect.y);
+		candidate.y = clamp(snapped, 0, state.canvas.height);
+		candidate.height = clamp(candidate.height, 0, state.canvas.height - candidate.y);
 	} else if (key === "width") {
-		rect.width = clamp(snapped, 0, state.canvas.width - rect.x);
+		candidate.width = clamp(snapped, 0, state.canvas.width - candidate.x);
 	} else if (key === "height") {
-		rect.height = clamp(snapped, 0, state.canvas.height - rect.y);
+		candidate.height = clamp(snapped, 0, state.canvas.height - candidate.y);
 	}
+	const normalized = normalizeRectToCanvas(state, candidate);
+	if (rectOverlapsActive(state, regionId, normalized)) {
+		setDirty(node);
+		return;
+	}
+	Object.assign(rect, normalized);
 	setDirty(node);
 }
 

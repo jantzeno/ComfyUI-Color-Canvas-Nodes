@@ -60,11 +60,11 @@ export function rectColor(id) {
 	return getDrawColor(id * 199, "FF").slice(0, 7);
 }
 
-function rectIsVisible(rect) {
+export function rectIsVisible(rect) {
 	return (Number(rect?.width) || 0) > 0 && (Number(rect?.height) || 0) > 0;
 }
 
-function rectsIntersect(first, second) {
+export function rectsIntersect(first, second) {
 	return !(
 		first.x + first.width <= second.x ||
 		second.x + second.width <= first.x ||
@@ -73,7 +73,7 @@ function rectsIntersect(first, second) {
 	);
 }
 
-function existingVisibleRects(state, excludedId) {
+export function existingVisibleRects(state, excludedId) {
 	const activeRegions = clampInt(state.activeRegions ?? 1, 1, MAX_REGIONS);
 	const rects = [];
 	for (let i = 1; i <= activeRegions; i++) {
@@ -87,6 +87,25 @@ function existingVisibleRects(state, excludedId) {
 		}
 	}
 	return rects;
+}
+
+export function rectOverlapsActive(state, regionId, rect) {
+	if (!rectIsVisible(rect)) {
+		return false;
+	}
+	return existingVisibleRects(state, regionId).some((existing) => rectsIntersect(rect, existing));
+}
+
+export function normalizeRectToCanvas(state, rect) {
+	const canvasGridSize = normalizeGridSize(state.canvas.gridSize);
+	const x = clamp(snap(rect.x ?? 0, canvasGridSize), 0, state.canvas.width);
+	const y = clamp(snap(rect.y ?? 0, canvasGridSize), 0, state.canvas.height);
+	return {
+		x,
+		y,
+		width: clamp(snap(rect.width ?? 0, canvasGridSize), 0, state.canvas.width - x),
+		height: clamp(snap(rect.height ?? 0, canvasGridSize), 0, state.canvas.height - y),
+	};
 }
 
 function firstFreeRect(state, width, height, existingRects) {
@@ -103,34 +122,26 @@ function firstFreeRect(state, width, height, existingRects) {
 	return null;
 }
 
-export function defaultRegionRect(state, id) {
+export function defaultRegionRect(state, id, existingRectsOverride = null) {
 	const width = Math.min(state.canvas.width, state.canvas.gridSize * DEFAULT_REGION_CELLS);
 	const height = Math.min(state.canvas.height, state.canvas.gridSize * DEFAULT_REGION_CELLS);
 	const maxX = Math.max(0, state.canvas.width - width);
 	const maxY = Math.max(0, state.canvas.height - height);
-	const existingRects = existingVisibleRects(state, id);
+	const existingRects = existingRectsOverride ?? existingVisibleRects(state, id);
 	const freeRect = firstFreeRect(state, width, height, existingRects);
 	if (freeRect) {
 		return freeRect;
 	}
 
+	const fallbackWidth = Math.min(state.canvas.width, state.canvas.gridSize);
+	const fallbackHeight = Math.min(state.canvas.height, state.canvas.gridSize);
+	const fallbackRect = firstFreeRect(state, fallbackWidth, fallbackHeight, existingRects);
+	if (fallbackRect) {
+		return fallbackRect;
+	}
+
 	if (existingRects.length) {
-		const latest = existingRects[existingRects.length - 1];
-		let x = latest.x + state.canvas.gridSize;
-		let y = latest.y;
-		if (x > maxX) {
-			x = 0;
-			y = latest.y + state.canvas.gridSize;
-		}
-		if (y > maxY) {
-			y = 0;
-		}
-		return {
-			x: Math.min(maxX, x),
-			y: Math.min(maxY, y),
-			width,
-			height,
-		};
+		return { x: 0, y: 0, width: 0, height: 0 };
 	}
 
 	const columns = Math.max(1, Math.floor(state.canvas.width / Math.max(1, width)));
@@ -141,6 +152,25 @@ export function defaultRegionRect(state, id) {
 		width,
 		height,
 	};
+}
+
+export function resolveActiveRectOverlaps(state) {
+	const acceptedRects = [];
+	const activeRegions = clampInt(state.activeRegions ?? 1, 1, MAX_REGIONS);
+	for (let i = 1; i <= activeRegions; i++) {
+		const region = state.regions[String(i)];
+		if (!region?.rect) {
+			continue;
+		}
+		let rect = normalizeRectToCanvas(state, region.rect);
+		if (rectIsVisible(rect) && acceptedRects.some((accepted) => rectsIntersect(rect, accepted))) {
+			rect = firstFreeRect(state, rect.width, rect.height, acceptedRects) ?? defaultRegionRect(state, i, acceptedRects);
+		}
+		region.rect = rect;
+		if (rectIsVisible(rect)) {
+			acceptedRects.push(rect);
+		}
+	}
 }
 
 export function blankRectRegion(id) {
@@ -173,11 +203,9 @@ export function ensureRectProperties(node) {
 	ensureVisibleRectRegions(state);
 	for (let i = 1; i <= MAX_REGIONS; i++) {
 		const rect = state.regions[String(i)].rect;
-		rect.x = clamp(rect.x ?? 0, 0, state.canvas.width);
-		rect.y = clamp(rect.y ?? 0, 0, state.canvas.height);
-		rect.width = clamp(rect.width ?? 0, 0, state.canvas.width - rect.x);
-		rect.height = clamp(rect.height ?? 0, 0, state.canvas.height - rect.y);
+		Object.assign(rect, normalizeRectToCanvas(state, rect));
 	}
+	resolveActiveRectOverlaps(state);
 	return state;
 }
 

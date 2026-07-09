@@ -114,6 +114,21 @@ class RegionStateTests(unittest.TestCase):
         self.assertEqual(state.regions[1].rect.width, 64)
         self.assertEqual(state.regions[1].rect.height, 64)
 
+    def test_overlapping_rect_moves_to_free_grid_slot(self):
+        state = normalize_rect_state({
+            "activeRegions": 2,
+            "canvas": {"width": 128, "height": 64, "gridSize": 32},
+            "regions": {
+                "1": {"rect": {"x": 0, "y": 0, "width": 64, "height": 64}, "color": "#112233"},
+                "2": {"rect": {"x": 32, "y": 0, "width": 64, "height": 64}, "color": "#445566"},
+            },
+        })
+
+        self.assertEqual(state.regions[1].rect.x, 64)
+        self.assertEqual(state.regions[1].rect.y, 0)
+        self.assertEqual(state.regions[1].rect.width, 64)
+        self.assertEqual(state.regions[1].rect.height, 64)
+
     def test_invalid_rect_color_uses_deterministic_fallback(self):
         state = normalize_rect_state({
             "activeRegions": 1,

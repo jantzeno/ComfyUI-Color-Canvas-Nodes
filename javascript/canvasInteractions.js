@@ -4,6 +4,10 @@ import {
 	clamp,
 	snap,
 } from "./utils.js";
+import {
+	normalizeRectToCanvas,
+	rectOverlapsActive,
+} from "./state.js";
 
 export const HANDLE_SIZE = 7;
 
@@ -118,8 +122,13 @@ export function applyRectDrag(state, drag, canvasPoint) {
 		}
 	}
 
-	rect.x = x;
-	rect.y = y;
-	rect.width = width;
-	rect.height = height;
+	const candidate = normalizeRectToCanvas(state, { x, y, width, height });
+	if (rectOverlapsActive(state, drag.regionId, candidate)) {
+		return;
+	}
+
+	rect.x = candidate.x;
+	rect.y = candidate.y;
+	rect.width = candidate.width;
+	rect.height = candidate.height;
 }
