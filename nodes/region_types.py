@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 MAX_REGIONS = 16
@@ -12,7 +13,7 @@ MIN_GRID_SIZE = 8
 MAX_GRID_SIZE = 64
 GRID_SIZE_VALUES = (8, 16, 32, 64)
 DEFAULT_REGION_CELLS = 2
-REGIONAL_COLOR_VERSION = 1
+REGIONAL_COLOR_VERSION = 2
 
 ColorMap = dict[str, str]
 
@@ -37,6 +38,19 @@ class RectRegion:
     region_id: str
     rect: Rect
     color: str
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
+class RegionalColorRegionInput:
+    rect: Rect
+    grid_size: int = DEFAULT_GRID_SIZE
+
+
+@dataclass(frozen=True)
+class RegionalColorRegionsInput:
+    active_regions: int
+    regions: tuple[Optional[RegionalColorRegionInput], ...]
 
 
 @dataclass(frozen=True)

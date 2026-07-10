@@ -1,6 +1,7 @@
-from comfy_api.latest import io, ui
+from comfy_api.latest import io
 
 from .constants import COLOR_DICT, MAX_REGIONS
+from .selector_state import select_region_color, selector_ui_payload
 
 
 class RegionalColorSelector(io.ComfyNode):
@@ -23,10 +24,5 @@ class RegionalColorSelector(io.ComfyNode):
 
     @classmethod
     def execute(cls, color_dict: dict, region_id: int) -> io.NodeOutput:
-        color = "error"
-        region_key = str(region_id)
-
-        if 1 <= int(region_id) <= MAX_REGIONS and isinstance(color_dict, dict):
-            color = color_dict.get(region_key, color)
-
-        return io.NodeOutput(color, ui=ui.PreviewText(color))
+        color = select_region_color(color_dict, region_id)
+        return io.NodeOutput(color, ui=selector_ui_payload(color))

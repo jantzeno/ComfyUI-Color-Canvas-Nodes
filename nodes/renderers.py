@@ -16,7 +16,7 @@ def render_rect_canvas(state) -> RectRenderResult:
         if rect.width == 0 or rect.height == 0:
             continue
         draw.rectangle(
-            [rect.x, rect.y, rect.x + rect.width, rect.y + rect.height],
+            [rect.x, rect.y, rect.x + rect.width - 1, rect.y + rect.height - 1],
             fill=region.color,
         )
 

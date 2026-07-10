@@ -13,14 +13,16 @@ import {
 	snap,
 } from "./utils.js";
 
-export const REGIONAL_COLOR_VERSION = 1;
+export const REGIONAL_COLOR_VERSION = 2;
 export const DEFAULT_WIDTH = 512;
 export const DEFAULT_HEIGHT = 512;
 export const DEFAULT_GRID_SIZE = 32;
 export const DEFAULT_REGION_CELLS = 2;
 
-export function normalizeCanvasDimension(value, fallback) {
-	return clamp(snap(clamp(value ?? fallback, MIN_RESOLUTION, MAX_RESOLUTION), DIMENSION_STEP), MIN_RESOLUTION, MAX_RESOLUTION);
+export function normalizeCanvasDimension(value, fallback, exact = false) {
+	const minResolution = exact ? 1 : MIN_RESOLUTION;
+	const clamped = clamp(value ?? fallback, minResolution, MAX_RESOLUTION);
+	return exact ? Math.round(clamped) : clamp(snap(clamped, DIMENSION_STEP), MIN_RESOLUTION, MAX_RESOLUTION);
 }
 
 export function normalizeGridSize(value) {
@@ -35,20 +37,45 @@ export function setProperty(node, key, value) {
 	}
 }
 
+export function isPlainRecord(value) {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function recoverArrayState(value) {
+	const recovered = {};
+	for (const key of ["version", "activeRegions", "selectedRegion", "canvas", "regions"]) {
+		if (Object.prototype.hasOwnProperty.call(value, key)) {
+			recovered[key] = value[key];
+		}
+	}
+	return recovered;
+}
+
+export function setRegionalColorState(node, payload) {
+	const state = Array.isArray(payload) && payload.length === 1 ? payload[0] : payload;
+	if (!isPlainRecord(state)) {
+		return false;
+	}
+	setProperty(node, "regionalColor", JSON.parse(JSON.stringify(state)));
+	return true;
+}
+
 export function ensureRegionalColor(node) {
 	if (!node.properties) {
 		node.properties = {};
 	}
-	if (!node.properties.regionalColor || typeof node.properties.regionalColor !== "object") {
+	if (Array.isArray(node.properties.regionalColor)) {
+		setProperty(node, "regionalColor", recoverArrayState(node.properties.regionalColor));
+	} else if (!isPlainRecord(node.properties.regionalColor)) {
 		setProperty(node, "regionalColor", {});
 	}
 
 	const state = node.properties.regionalColor;
 	state.version = REGIONAL_COLOR_VERSION;
-	if (!state.canvas || typeof state.canvas !== "object") {
+	if (!isPlainRecord(state.canvas)) {
 		state.canvas = {};
 	}
-	if (!state.regions || typeof state.regions !== "object") {
+	if (!isPlainRecord(state.regions)) {
 		state.regions = {};
 	}
 	state.activeRegions = clampInt(state.activeRegions ?? 1, 1, MAX_REGIONS);
@@ -177,13 +204,15 @@ export function blankRectRegion(id) {
 	return {
 		rect: { x: 0, y: 0, width: 0, height: 0 },
 		color: rectColor(id),
+		enabled: true,
 	};
 }
 
 export function ensureRectProperties(node) {
 	const state = ensureRegionalColor(node);
-	state.canvas.width = normalizeCanvasDimension(state.canvas.width, DEFAULT_WIDTH);
-	state.canvas.height = normalizeCanvasDimension(state.canvas.height, DEFAULT_HEIGHT);
+	const exactDimensions = Boolean(node?._regionalExactDimensions);
+	state.canvas.width = normalizeCanvasDimension(state.canvas.width, DEFAULT_WIDTH, exactDimensions);
+	state.canvas.height = normalizeCanvasDimension(state.canvas.height, DEFAULT_HEIGHT, exactDimensions);
 	state.canvas.gridSize = normalizeGridSize(state.canvas.gridSize);
 	state.selectedRegion = String(clampInt(state.selectedRegion ?? 1, 1, state.activeRegions));
 
@@ -197,6 +226,9 @@ export function ensureRectProperties(node) {
 		}
 		if (!state.regions[id].color) {
 			state.regions[id].color = rectColor(i);
+		}
+		if (typeof state.regions[id].enabled !== "boolean") {
+			state.regions[id].enabled = true;
 		}
 	}
 

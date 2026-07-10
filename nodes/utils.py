@@ -14,6 +14,34 @@ def pil2tensor(image):
     return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
 
 
+def image_dimensions(image) -> tuple[int, int]:
+    shape = getattr(image, "shape", ())
+    if len(shape) < 3:
+        raise ValueError("IMAGE inputs must have at least height, width, and channel dimensions")
+    return int(shape[-2]), int(shape[-3])
+
+
+def prompt_input_is_linked(hidden, input_name: str) -> bool:
+    prompt = getattr(hidden, "prompt", None)
+    unique_id = getattr(hidden, "unique_id", None)
+    if not isinstance(prompt, dict) or unique_id is None:
+        return False
+
+    node = prompt.get(str(unique_id))
+    if node is None:
+        node = prompt.get(unique_id)
+    inputs = node.get("inputs") if isinstance(node, dict) else None
+    value = inputs.get(input_name) if isinstance(inputs, dict) else None
+    return isinstance(value, (list, tuple)) and len(value) >= 2
+
+
+def resolve_reference_dimensions(hidden, image, width, height) -> tuple[int, int]:
+    image_width, image_height = image_dimensions(image)
+    resolved_width = width if prompt_input_is_linked(hidden, "width") else image_width
+    resolved_height = height if prompt_input_is_linked(hidden, "height") else image_height
+    return resolved_width, resolved_height
+
+
 def clamp_dimension(value, default=512, max_value=DEFAULT_MAX_DIMENSION, min_value=1):
     try:
         value = int(round(float(value)))

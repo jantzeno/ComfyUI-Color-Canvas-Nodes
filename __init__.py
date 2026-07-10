@@ -4,6 +4,15 @@
 from comfy_api.latest import ComfyExtension, io
 
 from .nodes.RegionalColorCanvas import RegionalColorCanvas
+from .nodes.RegionalColorAttentionCanvas import (
+    RegionalColorAttentionCanvas,
+    RegionalColorHookCanvasExperimental,
+)
+from .nodes.RegionalColorCanvasReference import RegionalColorCanvasReference
+from .nodes.RegionalColorGridSize import RegionalColorGridSize
+from .nodes.RegionalColorReferenceImage import RegionalColorReferenceImage
+from .nodes.RegionalColorRegion import RegionalColorRegion
+from .nodes.RegionalColorRegions import RegionalColorRegions
 from .nodes.RegionalColorSelector import RegionalColorSelector
 
 
@@ -14,6 +23,13 @@ class RegionalColorExtension(ComfyExtension):
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [
             RegionalColorCanvas,
+            RegionalColorAttentionCanvas,
+            RegionalColorHookCanvasExperimental,
+            RegionalColorCanvasReference,
+            RegionalColorGridSize,
+            RegionalColorReferenceImage,
+            RegionalColorRegion,
+            RegionalColorRegions,
             RegionalColorSelector,
         ]
 
